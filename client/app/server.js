@@ -40,7 +40,6 @@ sendXHR('GET', '/user/4/feed', undefined, (xhr) => {
 
 /**
  * Adds a new comment to the database on the given feed item.
- */
 export function postComment(feedItemId, author, contents, cb) {
   var feedItem = readDocument('feedItems', feedItemId);
   feedItem.comments.push({
@@ -52,6 +51,35 @@ export function postComment(feedItemId, author, contents, cb) {
   writeDocument('feedItems', feedItem);
   // Return a resolved version of the feed item.
   emulateServerReturn(getFeedItemSync(feedItemId), cb);
+}
+*/
+
+
+
+/**
+ * Adds a new status update to the database.
+*/
+export function postStatusUpdate(user, location, contents, cb) {
+  sendXHR('POST', '/feeditem', {
+    userId: user,
+    location: location,
+    contents: contents
+}, (xhr) => {
+// Return the new status update.
+  cb(JSON.parse(xhr.responseText));
+}); }
+
+
+export function postComment(feedItemId, author, contents, cb) {
+
+  sendXHR('POST', '/comment', {
+    feedItemId: feedItemId,
+    author: author,
+    contents: contents
+}, (xhr) => {
+// Return the new status update.
+  cb(JSON.parse(xhr.responseText));
+});
 }
 
 
@@ -65,6 +93,26 @@ export function likeFeedItem(feedItemId, userId, cb) {
 });
 }
 
+export function likeComment(feedItemId, commentIdx, userId, cb) {
+  sendXHR('PUT', '/feedItem/' + feedItemId + '/commentId/' + commentIdx + '/likelist/' + userId,
+    undefined, (xhr) => { cb(JSON.parse(xhr.responseText));
+});
+}
+
+
+/**
+ * Adds a 'like' to a comment.
+
+export function likeComment(feedItemId, commentIdx, userId, cb) {
+  var feedItem = readDocument('feedItems', feedItemId);
+  var comment = feedItem.comments[commentIdx];
+  comment.likeCounter.push(userId);
+  writeDocument('feedItems', feedItem);
+  comment.author = readDocument('users', comment.author);
+  emulateServerReturn(comment, cb);
+}
+*/
+
 /**
  * Updates a feed item's likeCounter by removing the user
  * from the likeCounter. Provides an updated likeCounter
@@ -75,24 +123,15 @@ export function unlikeFeedItem(feedItemId, userId, cb) {
     undefined, (xhr) => { cb(JSON.parse(xhr.responseText));
   });
 }
-
-
-
-/**
- * Adds a 'like' to a comment.
- */
-export function likeComment(feedItemId, commentIdx, userId, cb) {
-  var feedItem = readDocument('feedItems', feedItemId);
-  var comment = feedItem.comments[commentIdx];
-  comment.likeCounter.push(userId);
-  writeDocument('feedItems', feedItem);
-  comment.author = readDocument('users', comment.author);
-  emulateServerReturn(comment, cb);
+export function unlikeComment(feedItemId, commentIdx, userId, cb) {
+  sendXHR('DELETE', '/feedItem/' + feedItemId + '/commentId/' + commentIdx + '/likelist/' + userId,
+    undefined, (xhr) => { cb(JSON.parse(xhr.responseText));
+  });
 }
 
 /**
  * Removes a 'like' from a comment.
- */
+
 export function unlikeComment(feedItemId, commentIdx, userId, cb) {
   var feedItem = readDocument('feedItems', feedItemId);
   var comment = feedItem.comments[commentIdx];
@@ -104,6 +143,7 @@ export function unlikeComment(feedItemId, commentIdx, userId, cb) {
   comment.author = readDocument('users', comment.author);
   emulateServerReturn(comment, cb);
 }
+*/
 
 /**
  * Updates the text in a feed item (assumes a status update)
@@ -186,17 +226,3 @@ break;
 default:
 throw new Error('Unknown body type: ' + typeof(body));
 } }
-
-
-/**
- * Adds a new status update to the database.
-*/
-export function postStatusUpdate(user, location, contents, cb) {
-  sendXHR('POST', '/feeditem', {
-    userId: user,
-    location: location,
-    contents: contents
-}, (xhr) => {
-// Return the new status update.
-  cb(JSON.parse(xhr.responseText));
-}); }

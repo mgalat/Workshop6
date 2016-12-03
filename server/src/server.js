@@ -8,6 +8,7 @@ var app = express();
 var database = require('./database.js');
 var readDocument = database.readDocument;
 
+var CommentSchema = require('./schemas/comment.json');
 var StatusUpdateSchema = require('./schemas/statusupdate.json');
 var validate = require('express-jsonschema').validate;
 var writeDocument = database.writeDocument;
@@ -128,25 +129,8 @@ var feedData = readDocument('feeds', userData.feed); feedData.contents.unshift(n
   // Update the feed object.
   writeDocument('feeds', feedData);
 // Return the newly-posted object.
-return newStatusUpdate; }
-// `POST /feeditem { userId: user, location: location, contents: contents  }`
-app.post('/feeditem',
-validate({ body: StatusUpdateSchema }), function(req, res) {
-  // If this function runs, `req.body` passed JSON validation!
-var body = req.body;
-var fromUser = getUserIdFromToken(req.get('Authorization'));
-// Check if requester is authorized to post this status update. // (The requester must be the author of the update.)
-if (fromUser === body.userId) {
-var newUpdate = postStatusUpdate(body.userId, body.location, body.contents);
-// When POST creates a new resource, we should tell the client about it // in the 'Location' header and use status code 201.
-res.status(201);
-res.set('Location', '/feeditem/' + newUpdate._id);
-     // Send the update!
-res.send(newUpdate); } else {
-    // 401: Unauthorized.
-    res.status(401).end();
-  }
-});
+return newStatusUpdate;
+}
 
 // Reset database.
 app.post('/resetdb', function(req, res) {
@@ -231,6 +215,53 @@ app.put('/feeditem/:feeditemid/likelist/:userid', function(req, res) { var fromU
   }
 });
 
+// Like a comment.
+app.put('/feeditem/:feeditemid/commentId/:commentIdx/likelist/:userid', function(req, res) {
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  // Convert params from string to number.
+  var feedItemId = parseInt(req.params.feeditemid, 10);
+  var userId = parseInt(req.params.userid, 10);
+  var commentIdx = parseInt(req.params.commentIdx, 10);
+  if (fromUser === userId) {
+
+    var feedItem = readDocument('feedItems', feedItemId);
+    var comment = feedItem.comments[commentIdx];
+    comment.likeCounter.push(userId);
+    writeDocument('feedItems', feedItem);
+    comment.author = readDocument('users', comment.author);
+    res.send(comment);
+
+  } else {
+    // 401: Unauthorized.
+    res.status(401).end();
+  }
+});
+
+// Unlike a feed item.
+app.delete('/feeditem/:feeditemid/commentId/:commentIdx/likelist/:userid',function(req, res) {
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  // Convert params from string to number.
+  var feedItemId = parseInt(req.params.feeditemid, 10);
+  var userId = parseInt(req.params.userid, 10);
+  var commentIdx = parseInt(req.params.commentIdx, 10);
+  if (fromUser === userId) {
+    var feedItem = readDocument('feedItems', feedItemId);
+    var comment = feedItem.comments[commentIdx];
+    var userIndex = comment.likeCounter.indexOf(userId);
+    if (userIndex !== -1) {
+      comment.likeCounter.splice(userIndex, 1);
+      writeDocument('feedItems', feedItem);
+    }
+    comment.author = readDocument('users', comment.author);
+    res.send(comment);
+
+  } else {
+    // 401: Unauthorized.
+    res.status(401).end();
+  }
+});
+
+
 // Unlike a feed item.
 app.delete('/feeditem/:feeditemid/likelist/:userid',function(req, res) {
   var fromUser = getUserIdFromToken(req.get('Authorization'));
@@ -283,6 +314,61 @@ app.post('/search', function(req, res) {
     res.status(400).end();
   }
 });
+
+
+function postComment(feedItemId, author, contents) {
+  var feedItem = readDocument('feedItems', feedItemId);
+  feedItem.comments.push({
+    "author": author,
+    "contents": contents,
+    "postDate": new Date().getTime(),
+    "likeCounter": []
+  });
+  writeDocument('feedItems', feedItem);
+  // Return a resolved version of the feed item.
+  return getFeedItemSync(feedItemId);
+}
+
+
+// `POST /comment `
+app.post('/comment',
+  validate({ body: CommentSchema }), function(req, res) {
+  // If this function runs, `req.body` passed JSON validation!
+  var body = req.body;
+  var fromUser = getUserIdFromToken(req.get('Authorization'));
+  // Check if requester is authorized to post this status update. // (The requester must be the author of the update.)
+  if (fromUser === body.author) {
+    var newUpdate = postComment(body.feedItemId, body.author, body.contents);
+    // When POST creates a new resource, we should tell the client about it // in the 'Location' header and use status code 201.
+    res.status(201);
+    res.set('Comment', newUpdate);
+         // Send the update!
+    res.send(newUpdate);
+  } else {
+      // 401: Unauthorized.
+      res.status(401).end();
+    }
+});
+
+// `POST /feeditem { userId: user, location: location, contents: contents  }`
+app.post('/feeditem',
+validate({ body: StatusUpdateSchema }), function(req, res) {
+  // If this function runs, `req.body` passed JSON validation!
+var body = req.body;
+var fromUser = getUserIdFromToken(req.get('Authorization'));
+// Check if requester is authorized to post this status update. // (The requester must be the author of the update.)
+if (fromUser === body.userId) {
+var newUpdate = postStatusUpdate(body.userId, body.location, body.contents);
+// When POST creates a new resource, we should tell the client about it // in the 'Location' header and use status code 201.
+res.status(201);
+res.set('Location', '/feeditem/' + newUpdate._id);
+     // Send the update!
+res.send(newUpdate); } else {
+    // 401: Unauthorized.
+    res.status(401).end();
+  }
+});
+
 
 
 /**
